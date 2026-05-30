@@ -1,0 +1,189 @@
+CREATE DATABASE SistemaAcesso;
+GO
+
+USE SistemaAcesso;
+GO
+
+CREATE TABLE TiposUsuario (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Nome VARCHAR(30) NOT NULL UNIQUE
+);
+GO
+
+INSERT INTO TiposUsuario (Nome)
+VALUES
+('admin'),
+('usuario');
+GO
+
+CREATE TABLE Usuarios (
+    Id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    Username VARCHAR(50) NOT NULL UNIQUE,
+    Senha VARCHAR(255) NOT NULL,
+    Nome VARCHAR(150) NOT NULL,
+    TipoId INT NOT NULL,
+    CriadoEm DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    AtualizadoEm DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT FK_Usuarios_TiposUsuario
+        FOREIGN KEY (TipoId)
+        REFERENCES TiposUsuario(Id)
+);
+GO
+
+CREATE INDEX IX_Usuarios_Nome
+ON Usuarios(Nome);
+GO
+
+CREATE INDEX IX_Usuarios_Username
+ON Usuarios(Username);
+GO
+
+CREATE TABLE Acessos (
+    Id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    UsuarioId BIGINT NOT NULL,
+    DataHora DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    IP VARCHAR(45) NULL,
+    Navegador VARCHAR(255) NULL,
+
+    CONSTRAINT FK_Acessos_Usuarios
+        FOREIGN KEY (UsuarioId)
+        REFERENCES Usuarios(Id)
+        ON DELETE CASCADE
+);
+GO
+
+CREATE INDEX IX_Acessos_UsuarioId
+ON Acessos(UsuarioId);
+GO
+
+CREATE INDEX IX_Acessos_DataHora
+ON Acessos(DataHora DESC);
+GO
+
+CREATE TRIGGER TR_Usuarios_AtualizadoEm
+ON Usuarios
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE u
+    SET AtualizadoEm = SYSDATETIME()
+    FROM Usuarios u
+    INNER JOIN inserted i
+        ON u.Id = i.Id;
+END;
+GO
+
+INSERT INTO Usuarios
+(
+    Username,
+    Senha,
+    Nome,
+    TipoId
+)
+VALUES
+('admin','admin123','Carlos Administrador',1),
+('joao','joao123','João Silva',2),
+('maria','maria123','Maria Souza',2),
+('pedro','pedro123','Pedro Costa',2);
+GO
+
+INSERT INTO Acessos
+(
+    UsuarioId,
+    DataHora
+)
+VALUES
+(1,'2026-05-10 08:14:00'),
+(1,'2026-05-09 17:32:00'),
+(1,'2026-05-08 09:05:00'),
+(2,'2026-05-10 09:00:00'),
+(2,'2026-05-07 14:22:00'),
+(2,'2026-05-05 11:48:00'),
+(3,'2026-05-10 10:15:00'),
+(3,'2026-05-08 16:00:00'),
+(4,'2026-05-09 13:20:00');
+GO
+
+CREATE VIEW VW_Usuarios AS
+SELECT
+    U.Id,
+    U.Nome,
+    U.Username,
+    T.Nome AS Tipo,
+    U.CriadoEm,
+    U.AtualizadoEm
+FROM Usuarios U
+INNER JOIN TiposUsuario T
+    ON T.Id = U.TipoId;
+GO
+
+CREATE VIEW VW_HistoricoAcessos AS
+SELECT
+    A.Id,
+    U.Nome,
+    U.Username,
+    A.DataHora,
+    A.IP,
+    A.Navegador
+FROM Acessos A
+INNER JOIN Usuarios U
+    ON U.Id = A.UsuarioId;
+GO
+
+CREATE PROCEDURE SP_Login
+(
+    @Username VARCHAR(50),
+    @Senha VARCHAR(255)
+)
+AS
+BEGIN
+    SELECT
+        U.Id,
+        U.Nome,
+        U.Username,
+        T.Nome AS Tipo
+    FROM Usuarios U
+    INNER JOIN TiposUsuario T
+        ON T.Id = U.TipoId
+    WHERE U.Username = @Username
+    AND U.Senha = @Senha;
+END;
+GO
+
+CREATE PROCEDURE SP_RegistrarAcesso
+(
+    @UsuarioId BIGINT,
+    @IP VARCHAR(45) = NULL,
+    @Navegador VARCHAR(255) = NULL
+)
+AS
+BEGIN
+    INSERT INTO Acessos
+    (
+        UsuarioId,
+        IP,
+        Navegador
+    )
+    VALUES
+    (
+        @UsuarioId,
+        @IP,
+        @Navegador
+    );
+END;
+GO
+
+CREATE PROCEDURE SP_PromoverAdministrador
+(
+    @UsuarioId BIGINT
+)
+AS
+BEGIN
+    UPDATE Usuarios
+    SET TipoId = 1
+    WHERE Id = @UsuarioId;
+END;
+GO
